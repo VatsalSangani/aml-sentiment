@@ -1,0 +1,68 @@
+# ── Data — too large for GitHub ───────────────────────────────
+data/
+*.csv
+*.parquet
+*.json.gz
+
+# ── Trained models — too large for GitHub ─────────────────────
+models/
+*.json
+*.txt
+*.pkl
+*.bin
+*.pt
+*.safetensors
+
+# Exception — keep config JSONs (not model weights)
+!ensemble_weights.json
+!evaluation_report.txt
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+.env
+
+# ── Jupyter ────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Node / React ───────────────────────────────────────────────
+node_modules/
+dashboard/build/
+npm-debug.log*
+.npm
+
+# ── Qwen model cache ───────────────────────────────────────────
+~/.cache/huggingface/
+huggingface_cache/
+
+# ── Windows ────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# ── IDE ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+spark-warehouse/
+metastore_db/
+
+# ── Secrets ────────────────────────────────────────────────────
+.env
+*.key
+*.pem
+secrets.py
