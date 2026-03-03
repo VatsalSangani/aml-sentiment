@@ -1,7 +1,7 @@
 # AML Sentinel — Anti-Money Laundering Detection System
 
 > End-to-end AML detection pipeline built on 31.9 million real financial transactions.  
-> XGBoost + LightGBM ensemble model with Qwen 2.5 1.5B explainability and a React compliance dashboard.
+> XGBoost + LightGBM ensemble model with Qwen 2.5 1.5B explainability, production-grade model drift monitoring, and a React compliance dashboard.
 
 ---
 
@@ -12,7 +12,6 @@
 - [Dataset](#dataset)
 - [Project Structure](#project-structure)
 - [Setup & Running](#setup--running)
-- [Live Demo](#live-demo)
 - [Technical Decisions — Q&A](#technical-decisions--qa)
   - [Why XGBoost + LightGBM and not a neural network?](#why-xgboost--lightgbm-and-not-a-neural-network)
   - [Why an ensemble and not just one model?](#why-an-ensemble-and-not-just-one-model)
@@ -33,10 +32,13 @@
   - [What is the circular transaction pattern and why is it so strong?](#what-is-the-circular-transaction-pattern-and-why-is-it-so-strong)
   - [Why does the model miss some fraud cases?](#why-does-the-model-miss-some-fraud-cases)
   - [What would you do differently in production?](#what-would-you-do-differently-in-production)
+  - [How does the model monitoring system work?](#how-does-the-model-monitoring-system-work)
+  - [What is data drift and concept drift and why does it matter for AML?](#what-is-data-drift-and-concept-drift-and-why-does-it-matter-for-aml)
 - [Model Performance](#model-performance)
 - [Key EDA Findings](#key-eda-findings)
 - [Feature Engineering](#feature-engineering)
 - [XAI Design — Plain English Explanations](#xai-design--plain-english-explanations)
+- [Model Monitoring & Drift Detection](#model-monitoring--drift-detection)
 - [Known Limitations](#known-limitations)
 
 ---
@@ -49,6 +51,8 @@ AML Sentinel is a complete anti-money laundering detection system that takes raw
 2. **SHAP-based feature attribution** explaining which signals drove the score
 3. **A plain-English compliance report** written by Qwen 2.5 1.5B, designed for investigators — no technical jargon, no ML terms
 4. **A React dashboard** for compliance officers to analyze live transactions and review pre-generated case studies
+5. **A live monitoring system** that logs every prediction, detects data and concept drift, and alerts when the model's input distribution has shifted from training baselines
+5. **A live monitoring system** that logs every prediction, detects data and concept drift, and alerts when the model's input distribution has shifted from training baselines
 
 ---
 
@@ -77,13 +81,25 @@ Qwen 2.5 1.5B (4-bit NF4 quantized, 1.17 GB VRAM)
         │
         ▼
 FastAPI Backend (localhost:8000)
-        │  POST /analyze — live scoring + explanation
-        │  GET  /reports — 30 pre-generated XAI cases
-        │  GET  /stats   — model performance metrics
+        │  POST /analyze           — live scoring + explanation
+        │  GET  /reports           — 30 pre-generated XAI cases
+        │  GET  /stats             — model performance metrics
+        │  GET  /monitoring/drift  — drift detection vs training baselines
+        │  GET  /monitoring/stats  — live prediction score distribution
+        │  GET  /monitoring/recent — last N predictions for audit
+        │  GET  /monitoring/health — DB status + data sufficiency
         │
         ▼
 React Dashboard (localhost:3000)
-        Transaction Analyzer | XAI Report Viewer | Model Performance
+        Transaction Analyzer | XAI Report Viewer | Model Performance | Model Monitoring
+        │
+        ▼
+monitor.py — SQLite prediction logger (every /analyze call is recorded)
+        │
+        ▼
+drift_detector.py — Statistical drift engine
+        Compares live distributions against training baselines
+        Returns: STABLE | MINOR_DRIFT | DRIFT_DETECTED | CRITICAL_DRIFT
 ```
 
 ---
@@ -126,10 +142,12 @@ AML_Sentinel/
 │   ├── graph_eda.py             ← network/graph EDA
 │   └── hardware_check.py       ← GPU/CUDA verification
 ├── backend/
-│   ├── main.py                  ← FastAPI app + all endpoints
+│   ├── main.py                  ← FastAPI app + all endpoints incl. monitoring
 │   ├── model_service.py         ← XGBoost + LightGBM + SHAP
 │   ├── xai_service.py           ← Qwen load-on-demand + prompt pipeline
-│   └── schemas.py               ← Pydantic request/response models
+│   ├── schemas.py               ← Pydantic request/response models
+│   ├── monitor.py               ← prediction logger (SQLite)
+│   └── drift_detector.py        ← statistical drift detection engine
 ├── dashboard/
 │   └── src/
 │       ├── AML_Sentinel_Dashboard.jsx   ← main React component
@@ -190,7 +208,8 @@ data/raw/HI-Medium_Accounts.csv
 cd backend
 python main.py
 # → http://localhost:8000
-# → http://localhost:8000/docs   (Swagger UI)
+# → http://localhost:8000/docs              (Swagger UI)
+# → http://localhost:8000/monitoring/health (monitoring DB status)
 ```
 
 ### 5. Start the dashboard
@@ -201,16 +220,6 @@ npm install
 npm start
 # → http://localhost:3000
 ```
-
----
-## Live Demo
-
-[![Open in HuggingFace Spaces](https://img.shields.io/badge/🤗%20HuggingFace-Live%20Demo-blue)](https://huggingface.co/spaces/brendvat/AML_Setinel)
-
-> **Try it live** → [huggingface.co/spaces/brendvat/AML_Setinel](https://huggingface.co/spaces/brendvat/AML_Setinel)
-
-The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
-Qwen 2.5 1.5B generates plain-English explanations on-demand.
 
 ---
 
@@ -359,9 +368,9 @@ Flask is synchronous — in a multi-user scenario each request blocks the server
 
 ### Why React for the frontend?
 
-The dashboard has three distinct interactive tabs with different state requirements — a compliance report viewer with filtering and selection, a live transaction analyser with form state and result display, and a model performance view with visualisations. Managing this complexity in vanilla JavaScript or jQuery would require significant boilerplate.
+The dashboard has four distinct interactive tabs with different state requirements — a compliance report viewer with filtering, a live transaction analyser with form state and result display, a model performance view, and a monitoring tab with live API polling and auto-refresh. Managing this complexity in vanilla JavaScript would require significant boilerplate.
 
-React's component model keeps the SHAP bar chart, score gauge, explanation formatter, and metric cards isolated and reusable. State management with `useState` is straightforward for this scope. The component-based approach also makes it trivial to later replace the mock scoring logic with real API calls.
+React's component model keeps the SHAP bar chart, score gauge, explanation formatter, metric cards, and monitoring widgets isolated and reusable. State management with `useState` and `useEffect` is straightforward for this scope.
 
 ---
 
@@ -427,11 +436,45 @@ The recommended fix for production is a hard rule: any account with fan_out_degr
 
 **Infrastructure:** Deploy on a split architecture — ML models on a t3.medium (~$30/month) and Qwen on a g4dn.xlarge spun up on-demand (~$0.53/hour only when used).
 
-**Monitoring:** Implement feature drift detection — track the distribution of each of the 18 features over time. When the distribution shifts significantly (launderers adapt their behaviour), retrain the model on recent data.
+**Monitoring:** Replace the SQLite monitoring store with PostgreSQL + TimescaleDB for persistent time-series analysis. Add automated Slack/email alerts on drift detection. Expand from snapshot comparison to rolling 90-day trend analysis with KS-test and PSI statistical significance testing. Integrate investigator disposition outcomes as labels to enable concept drift detection.
 
 **Compliance:** Add a full audit trail — every flag, every SHAP value, and every Qwen explanation logged to a tamper-proof store. Regulators require this.
 
 ---
+
+---
+
+### How does the model monitoring system work?
+
+Every call to `/analyze` is silently logged to a SQLite database (`predictions.db`) via `monitor.py`. Each record stores the raw inputs, all 18 engineered features, the risk score, verdict, and processing latency.
+
+The drift detection engine (`drift_detector.py`) queries this database and compares the live distribution of each tracked metric against the training set baselines established during EDA. It returns one of four statuses:
+
+| Status | Meaning | Action |
+|---|---|---|
+| `STABLE` | All metrics within expected range | No action required |
+| `MINOR_DRIFT` | Small distributional shifts detected | Monitor for 7 more days |
+| `DRIFT_DETECTED` | Significant shift in high-importance feature | Schedule retraining within 30 days |
+| `CRITICAL_DRIFT` | Model reliability compromised | Increase manual review to 100%, initiate emergency retraining |
+
+Each alert includes the specific metric, the training baseline value, the current live value, the percentage change, a plain-English explanation of what the drift means operationally, and a concrete recommended action.
+
+The monitoring tab in the dashboard exposes this in real time — selectable lookback windows (1d / 7d / 14d / 30d), a payment format mix chart with per-format drift indicators, a score distribution histogram, and a live prediction audit table.
+
+---
+
+### What is data drift and concept drift and why does it matter for AML?
+
+**Data drift** means the distribution of input features changes over time. If ACH transactions drop from 18% to 5% of volume, the model's strongest feature (`payment_format_risk` — 40% of model importance) becomes far less informative. The model still works technically but its calibration degrades because it was trained on a different distribution.
+
+**Concept drift** means the relationship between features and the fraud label changes. In AML this is particularly dangerous: launderers adapt. If the model learns that circular transactions have a 17% fraud rate, launderers stop using circular patterns. The feature remains in the model but its predictive power disappears. Concept drift is harder to detect because it requires labelled ground truth — you need confirmed fraud labels from investigators to measure whether the model's learned relationships still hold.
+
+**Prediction drift** means the model's output distribution shifts — average scores creeping up or the flag rate changing — without a corresponding change in actual fraud prevalence. This often signals a data pipeline change upstream.
+
+In AML specifically, these drift types compound each other. A regulatory change can shift transaction volumes overnight. A new laundering typology can invalidate previously strong signals. An economic shock can change the base rate of suspicious activity. This is why monitoring is not optional in production AML systems — it is a regulatory requirement under most AML frameworks (FATF, FinCEN, FCA).
+
+Our monitoring system detects data drift and prediction drift. Concept drift detection requires ground truth labels from investigators, which is out of scope for this deployment but is the explicit next step for a production system.
+
 
 ## Model Performance
 
@@ -513,6 +556,57 @@ A post-processing validator checks every output for technical term leakage, hall
 
 ---
 
+## Model Monitoring & Drift Detection
+
+AML Sentinel includes a production-grade monitoring system that logs every prediction and continuously compares live traffic against the training distribution. This is exposed as the fourth tab in the React dashboard.
+
+### Architecture
+
+```
+Every /analyze call
+        |
+        v
+monitor.py logs to SQLite (predictions.db)
+        |  timestamp, payment_format, currency, amount_usd
+        |  all 18 engineered features, risk_score, verdict, processing_ms
+        |
+        v
+drift_detector.py queries the last N days of predictions
+        |  compares each metric against TRAINING_BASELINES dict
+        |  applies per-metric drift thresholds
+        |  classifies severity: MEDIUM / HIGH / CRITICAL
+        |
+        v
+/monitoring/* endpoints consumed by the dashboard Monitoring tab
+```
+
+### Metrics Tracked Against Training Baselines
+
+| Metric | Training Baseline | Drift Threshold | Why It Matters |
+|---|---|---|---|
+| flag_rate | 1.46% | >30% change | Model miscalibrated or missing new patterns |
+| avg_risk_score | 0.312 | >20% change | Score distribution shifted |
+| pct_ach | 18.0% | >25% change | ACH is 40% of model importance — critical |
+| pct_cross_border | 48.0% | >25% change | Transaction routing pattern change |
+| pct_in_cycle | 0.4% | >60% change | 154x lift signal going quiet = launderers adapting |
+| avg_fan_out | 2.21 | >30% change | Smurfing pattern change |
+| avg_payment_format_risk | 1.82 | >20% change | Overall payment mix shifting |
+| score_p95 | 0.891 | >15% change | High-end score distribution change |
+
+### Drift Severity & Recommended Actions
+
+| Status | Trigger | Action |
+|---|---|---|
+| `STABLE` | All metrics in range | Continue standard monitoring |
+| `MINOR_DRIFT` | Any metric exceeds threshold | Re-check in 7 days |
+| `DRIFT_DETECTED` | HIGH severity alert | Schedule retraining within 30 days, increase manual review |
+| `CRITICAL_DRIFT` | CRITICAL severity alert | Escalate to compliance, 100% manual review, emergency retraining |
+
+### Limitations
+
+Concept drift (launderers changing behaviour such that feature-fraud relationships break) requires ground-truth labels from investigators. On HuggingFace free tier, the SQLite database resets on Space restart — minimum 20 transactions required in the lookback window for drift analysis.
+
+
 ## Known Limitations
 
 **Static graph features** — `is_in_cycle` and `fan_out_degree` are computed at training time and approximated at inference time. A live system would need real-time graph traversal.
@@ -524,6 +618,10 @@ A post-processing validator checks every output for technical term leakage, hall
 **bank_risk_score leakage** — a 0.62% leakage was identified in audit. The bank risk score computed on training data slightly influences test set performance because some banks appear in both partitions. Impact is minimal but would be eliminated in production by using only pre-cutoff data for bank risk computation.
 
 **Qwen hallucination** — the 1.5B parameter model occasionally generates plausible-sounding but incorrect reasoning. The post-processing validator catches the most common failure modes. A fine-tuned model on expert-reviewed golden cases would eliminate this in production.
+
+**Monitoring persistence** — the SQLite monitoring database resets on HuggingFace Space restarts (free tier has no persistent storage). For persistent monitoring, write predictions to a HuggingFace Dataset repository or an external database.
+
+**Concept drift detection** — the current monitoring system cannot detect when launderers have adapted their behaviour and invalidated learned feature relationships. Requires labelled feedback from investigators.
 
 ---
 
