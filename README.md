@@ -12,6 +12,7 @@
 - [Dataset](#dataset)
 - [Project Structure](#project-structure)
 - [Setup & Running](#setup--running)
+- [Live Demo](#live-demo)
 - [Technical Decisions — Q&A](#technical-decisions--qa)
   - [Why XGBoost + LightGBM and not a neural network?](#why-xgboost--lightgbm-and-not-a-neural-network)
   - [Why an ensemble and not just one model?](#why-an-ensemble-and-not-just-one-model)
@@ -220,6 +221,17 @@ npm install
 npm start
 # → http://localhost:3000
 ```
+
+---
+
+## Live Demo
+
+[![Open in HuggingFace Spaces](https://img.shields.io/badge/🤗%20HuggingFace-Live%20Demo-blue)](https://huggingface.co/spaces/brendvat/AML_Setinel)
+
+> **Try it live** → [huggingface.co/spaces/brendvat/AML_Setinel](https://huggingface.co/spaces/brendvat/AML_Setinel)
+
+The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
+Qwen 2.5 1.5B generates plain-English explanations on-demand.
 
 ---
 
