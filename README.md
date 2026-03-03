@@ -202,6 +202,16 @@ npm start
 ```
 
 ---
+## 🚀 Live Demo
+
+[![Open in HuggingFace Spaces](https://img.shields.io/badge/🤗%20HuggingFace-Live%20Demo-blue)](https://huggingface.co/spaces/brendvat/AML_Setinel)
+
+> **Try it live** → [huggingface.co/spaces/brendvat/AML_Setinel](https://huggingface.co/spaces/brendvat/AML_Setinel)
+
+The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
+Qwen 2.5 1.5B generates plain-English explanations on-demand.
+
+---
 
 ## Technical Decisions — Q&A
 
