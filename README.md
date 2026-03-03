@@ -12,6 +12,7 @@
 - [Dataset](#dataset)
 - [Project Structure](#project-structure)
 - [Setup & Running](#setup--running)
+- [Live Demo](#live-demo)
 - [Technical Decisions — Q&A](#technical-decisions--qa)
   - [Why XGBoost + LightGBM and not a neural network?](#why-xgboost--lightgbm-and-not-a-neural-network)
   - [Why an ensemble and not just one model?](#why-an-ensemble-and-not-just-one-model)
@@ -202,7 +203,7 @@ npm start
 ```
 
 ---
-## 🚀 Live Demo
+## Live Demo
 
 [![Open in HuggingFace Spaces](https://img.shields.io/badge/🤗%20HuggingFace-Live%20Demo-blue)](https://huggingface.co/spaces/brendvat/AML_Setinel)
 
