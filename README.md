@@ -1,7 +1,7 @@
 # AML Sentinel — Anti-Money Laundering Detection System
 
 > End-to-end AML detection pipeline built on 31.9 million real financial transactions.  
-> XGBoost + LightGBM ensemble model with Qwen 2.5 1.5B explainability, production-grade model drift monitoring, and a React compliance dashboard.
+> XGBoost + LightGBM ensemble model with GPT-4o-mini explainability, production-grade model drift monitoring, and a React compliance dashboard.
 
 ---
 
@@ -19,8 +19,8 @@
   - [Why temporal split and not random split?](#why-temporal-split-and-not-random-split)
   - [Why AUC-PR and not accuracy?](#why-auc-pr-and-not-accuracy)
   - [Why SHAP for explainability?](#why-shap-for-explainability)
-  - [Why Qwen 2.5 1.5B for the AI explanation?](#why-qwen-25-15b-for-the-ai-explanation)
-  - [Why not fine-tune Qwen on your own data?](#why-not-fine-tune-qwen-on-your-own-data)
+  - [Why GPT-4o-mini for the AI explanation?](#why-gpt-4o-mini-for-the-ai-explanation)
+  - [Why not fine-tune the XAI model on your own data?](#why-not-fine-tune-the-xai-model-on-your-own-data)
   - [Why not SMOTE for class imbalance?](#why-not-smote-for-class-imbalance)
   - [Why 3-layer imbalance handling?](#why-3-layer-imbalance-handling)
   - [Why threshold 0.8514 and not the default 0.5?](#why-threshold-08514-and-not-the-default-05)
@@ -50,7 +50,7 @@ AML Sentinel is a complete anti-money laundering detection system that takes raw
 
 1. **A risk score** (0–1) for every transaction using an XGBoost + LightGBM ensemble trained on 31.9 million real transactions
 2. **SHAP-based feature attribution** explaining which signals drove the score
-3. **A plain-English compliance report** written by Qwen 2.5 1.5B, designed for investigators — no technical jargon, no ML terms
+3. **A plain-English compliance report** written by GPT-4o-mini, designed for investigators — no technical jargon, no ML terms
 4. **A React dashboard** for compliance officers to analyze live transactions and review pre-generated case studies
 5. **A live monitoring system** that logs every prediction, detects data and concept drift, and alerts when the model's input distribution has shifted from training baselines
 5. **A live monitoring system** that logs every prediction, detects data and concept drift, and alerts when the model's input distribution has shifted from training baselines
@@ -76,29 +76,28 @@ SHAP TreeExplainer — Feature Attribution
         │  Top 5 drivers per transaction
         │
         ▼
-Qwen 2.5 1.5B (4-bit NF4 quantized, 1.17 GB VRAM)
-        │  Plain-English compliance report
+OpenAI GPT-4o-mini
+        │  Plain-English compliance report (via OpenAI API)
         │  No SHAP values, no feature names in output
         │
         ▼
-FastAPI Backend (localhost:8000)
-        │  POST /analyze           — live scoring + explanation
-        │  GET  /reports           — 30 pre-generated XAI cases
-        │  GET  /stats             — model performance metrics
-        │  GET  /monitoring/drift  — drift detection vs training baselines
-        │  GET  /monitoring/stats  — live prediction score distribution
-        │  GET  /monitoring/recent — last N predictions for audit
-        │  GET  /monitoring/health — DB status + data sufficiency
+FastAPI Backend (0.0.0.0:8503)
+        │  POST /analyze     — live scoring + explanation
+        │  GET  /reports     — 30 pre-generated XAI cases
+        │  GET  /stats       — model performance metrics
+        │  GET  /health      — service health + model status
+        │  GET  /xai/status  — XAI service status
+        │  POST /xai/unload  — release XAI client
         │
         ▼
-React Dashboard (localhost:3000)
-        Transaction Analyzer | XAI Report Viewer | Model Performance | Model Monitoring
+React Dashboard (http://13.134.107.196:8503)
+        Transaction Analyzer | XAI Report Viewer | Model Performance
         │
         ▼
-monitor.py — SQLite prediction logger (every /analyze call is recorded)
+db/monitor.py — SQLite prediction logger (every /analyze call is recorded)
         │
         ▼
-drift_detector.py — Statistical drift engine
+services/drift_detector.py — Statistical drift engine
         Compares live distributions against training baselines
         Returns: STABLE | MINOR_DRIFT | DRIFT_DETECTED | CRITICAL_DRIFT
 ```
@@ -126,7 +125,7 @@ Variant: HI-Medium (High Illicit ratio)
 ## Project Structure
 
 ```
-AML_Sentinel/
+aml-sentiment/
 ├── data/                        ← dataset (not committed — too large)
 │   └── parquet/                 ← converted from CSV for faster reads
 ├── models/                      ← saved model files (not committed)
@@ -141,19 +140,30 @@ AML_Sentinel/
 │   ├── ingest.py                ← CSV → Parquet via PySpark
 │   ├── eda.py                   ← exploratory data analysis
 │   ├── graph_eda.py             ← network/graph EDA
-│   └── hardware_check.py       ← GPU/CUDA verification
+│   └── hardware_check.py       ← hardware verification
 ├── backend/
-│   ├── main.py                  ← FastAPI app + all endpoints incl. monitoring
-│   ├── model_service.py         ← XGBoost + LightGBM + SHAP
-│   ├── xai_service.py           ← Qwen load-on-demand + prompt pipeline
+│   ├── main.py                  ← FastAPI entry point (port 8503, ≤50 lines)
 │   ├── schemas.py               ← Pydantic request/response models
-│   ├── monitor.py               ← prediction logger (SQLite)
-│   └── drift_detector.py        ← statistical drift detection engine
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── health.py            ← GET /health
+│   │   ├── analyze.py           ← POST /analyze
+│   │   ├── reports.py           ← GET /reports
+│   │   ├── stats.py             ← GET /stats
+│   │   └── xai.py               ← GET /xai/status, POST /xai/unload
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── model_service.py     ← XGBoost + LightGBM + SHAP
+│   │   ├── xai_service.py       ← GPT-4o-mini via OpenAI API
+│   │   └── drift_detector.py    ← statistical drift detection engine
+│   └── db/
+│       ├── __init__.py
+│       └── monitor.py           ← SQLite prediction logger
 ├── dashboard/
 │   └── src/
 │       ├── AML_Sentinel_Dashboard.jsx   ← main React component
-│       └── api.js                       ← FastAPI client
-├── config.py                    ← paths + Spark session factory
+│       └── Api.js                       ← FastAPI client (EC2 URL)
+├── config.py                    ← paths, API port, model metrics, Spark session
 └── requirements.txt
 ```
 
@@ -166,9 +176,8 @@ AML_Sentinel/
 ```
 Python 3.12+
 Node.js 18+
-NVIDIA GPU with CUDA 12.x (for Qwen inference)
-CUDA toolkit installed
-Java 17 (for PySpark)
+OpenAI API key (for GPT-4o-mini explanations)
+Java 17 (for PySpark — data processing only)
 ```
 
 ### 1. Install dependencies
@@ -200,17 +209,18 @@ data/raw/HI-Medium_Accounts.csv
 ```
 1. AML_Feature_Engineering.ipynb  — processes data, builds 18 features, saves parquet
 2. AML_Model_Training.ipynb       — trains XGBoost + LightGBM, saves models
-3. AML_XAI.ipynb                  — generates 30 XAI case reports using Qwen
+3. AML_XAI.ipynb                  — generates 30 XAI case reports using GPT-4o-mini
 ```
 
 ### 4. Start the backend
 
 ```bash
+export OPENAI_API_KEY=sk-...   # required for GPT-4o-mini explanations
 cd backend
 python main.py
-# → http://localhost:8000
-# → http://localhost:8000/docs              (Swagger UI)
-# → http://localhost:8000/monitoring/health (monitoring DB status)
+# → http://0.0.0.0:8503
+# → http://0.0.0.0:8503/docs    (Swagger UI)
+# → http://0.0.0.0:8503/health  (service health)
 ```
 
 ### 5. Start the dashboard
@@ -231,7 +241,7 @@ npm start
 > **Try it live** → [huggingface.co/spaces/brendvat/AML_Setinel](https://huggingface.co/spaces/brendvat/AML_Setinel)
 
 The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
-Qwen 2.5 1.5B generates plain-English explanations on-demand.
+GPT-4o-mini generates plain-English explanations on-demand.
 
 ---
 
@@ -249,7 +259,7 @@ Neural networks (MLPs, transformers) are black boxes. In AML, every flag must be
 
 On tabular data with mixed feature types (binary flags, log-transformed amounts, counts), gradient boosting consistently outperforms neural networks in the literature. This is not a vision or NLP task where deep learning has a clear advantage.
 
-Finally, our GPU has 4.29 GB VRAM. A deep learning model large enough to be competitive on 32M rows would likely not fit alongside Qwen 2.5 1.5B. Gradient boosting models are extremely memory-efficient.
+Finally, gradient boosting models are extremely memory-efficient and run on CPU — no GPU required alongside the XAI service.
 
 **What about Graph Neural Networks (GNNs)?**  
 GNNs would theoretically be the best model here since money laundering is fundamentally a graph problem. However, GNNs require the full transaction graph to be loaded into memory during inference, which is impractical for a 32M node graph on 4.29 GB VRAM. We instead extracted the most valuable graph signals (circular patterns, fan-out degree, hub bank detection) as static features and fed them into the gradient boosting models — getting much of the benefit without the infrastructure cost.
@@ -292,31 +302,27 @@ SHAP TreeExplainer is also extremely fast for tree models — it runs in O(TLD) 
 
 ---
 
-### Why Qwen 2.5 1.5B for the AI explanation?
+### Why GPT-4o-mini for the AI explanation?
 
-Qwen 2.5 1.5B hits the right balance between capability and hardware constraint. At 4-bit NF4 quantization it uses 1.17 GB VRAM — the largest model that fits alongside our ML models on a 4.29 GB GPU.
+GPT-4o-mini delivers strong instruction-following and structured output via the OpenAI API with no GPU or local model requirements. This makes it practical for EC2 CPU deployments and eliminates VRAM contention with the ML models.
 
-We specifically chose it over alternatives for these reasons:
+Compared to a local quantized model:
 
-| Model | VRAM (4-bit) | Quality | Decision |
-|---|---|---|---|
-| Qwen 2.5 0.5B | ~0.4 GB | Too simple, repetitive outputs | Rejected |
-| Qwen 2.5 1.5B | ~1.17 GB | Good reasoning, structured output | **Selected** |
-| Qwen 2.5 3B | ~2.0 GB | Better but too tight with ML models | Rejected |
-| Llama 3.2 1B | ~0.8 GB | Weaker instruction following | Rejected |
-| Mistral 7B | ~4.0 GB | Would not fit with ML models | Rejected |
+| Approach | Hardware | Latency | Quality | Decision |
+|---|---|---|---|---|
+| Qwen 2.5 1.5B (local, 4-bit) | GPU required (~1.2 GB VRAM) | ~3–8 s | Good | Replaced |
+| GPT-4o-mini (API) | CPU-only (API call) | ~1–2 s | Excellent | **Selected** |
+| GPT-4o (API) | CPU-only (API call) | ~2–4 s | Best | Overkill for this task |
 
-Qwen 2.5 also has stronger instruction following than comparably-sized models, which is essential for enforcing our strict no-jargon output format.
+GPT-4o-mini also has stronger instruction-following for the strict no-jargon, structured format required by the compliance report template.
 
 ---
 
-### Why not fine-tune Qwen on your own data?
+### Why not fine-tune the XAI model on your own data?
 
-Fine-tuning Qwen on our own generated explanations would be circular — we would be training a model to reproduce its own outputs. This causes model collapse: the fine-tuned version loses diversity and gradually degrades in quality.
+Fine-tuning on our own generated explanations would be circular — training a model to reproduce its own outputs causes model collapse: the fine-tuned version loses diversity and degrades over time.
 
-The correct approach for production is to build a golden dataset: generate 3,000–5,000 explanations, have AML compliance experts manually review and correct each one, then fine-tune on the expert-corrected pairs. This requires domain expertise and time that is out of scope for this project but is explicitly designed for if this were to go to production.
-
-The current prompt engineering approach produces high-quality outputs for a portfolio context and is the right foundation to build the golden dataset from.
+The correct approach for production is a golden dataset: generate 3,000–5,000 explanations, have AML compliance experts manually review and correct each one, then fine-tune on expert-corrected pairs. This requires domain expertise and time that is out of scope for this project but is explicitly designed for if this were to go to production.
 
 ---
 
@@ -444,13 +450,13 @@ The recommended fix for production is a hard rule: any account with fan_out_degr
 
 **Model:** Replace static graph features with a live GNN that traverses the transaction graph at inference time. This would capture dynamic patterns that our static features miss, particularly multi-hop laundering chains (A → B → C → A).
 
-**XAI:** Build the golden dataset — have AML compliance experts review and correct 3,000–5,000 Qwen explanations, then fine-tune on the corrected pairs using QLoRA. This would reduce prompt length from ~800 tokens to ~150 tokens (3–4x inference speedup) and eliminate residual hallucination risk.
+**XAI:** Build the golden dataset — have AML compliance experts review and correct 3,000–5,000 GPT-4o-mini explanations, then fine-tune a smaller model on the corrected pairs. This would eliminate API costs at scale and reduce latency.
 
-**Infrastructure:** Deploy on a split architecture — ML models on a t3.medium (~$30/month) and Qwen on a g4dn.xlarge spun up on-demand (~$0.53/hour only when used).
+**Infrastructure:** Already deployed on AWS EC2 at port 8503. Next step: separate the ML inference process from the API layer for independent scaling.
 
 **Monitoring:** Replace the SQLite monitoring store with PostgreSQL + TimescaleDB for persistent time-series analysis. Add automated Slack/email alerts on drift detection. Expand from snapshot comparison to rolling 90-day trend analysis with KS-test and PSI statistical significance testing. Integrate investigator disposition outcomes as labels to enable concept drift detection.
 
-**Compliance:** Add a full audit trail — every flag, every SHAP value, and every Qwen explanation logged to a tamper-proof store. Regulators require this.
+**Compliance:** Add a full audit trail — every flag, every SHAP value, and every GPT-4o-mini explanation logged to a tamper-proof store. Regulators require this.
 
 ---
 
@@ -542,19 +548,19 @@ All 18 features were derived from EDA signals. Key design decisions:
 
 ## XAI Design — Plain English Explanations
 
-The Qwen explanation pipeline has a deliberate translation layer between the ML output and the language model:
+The GPT-4o-mini explanation pipeline has a deliberate translation layer between the ML output and the language model:
 
 ```
 SHAP values + feature names (ML output)
         ↓
 _translate_features() — converts everything to plain English
         ↓
-Qwen receives only plain English facts + plain English reasons
+GPT-4o-mini receives only plain English facts + plain English reasons
         ↓
-Qwen writes a compliance report — no technical terms in output
+GPT-4o-mini writes a compliance report — no technical terms in output
 ```
 
-This design prevents Qwen from ever seeing terms like `fan_out_degree`, `SHAP=+2.68`, or `payment_format_risk=3`. The output is written for compliance officers, not data scientists.
+This design prevents GPT-4o-mini from ever seeing terms like `fan_out_degree`, `SHAP=+2.68`, or `payment_format_risk=3`. The output is written for compliance officers, not data scientists.
 
 Each explanation follows a four-section structure that mirrors real AML compliance report templates:
 
@@ -629,7 +635,7 @@ Concept drift (launderers changing behaviour such that feature-fraud relationshi
 
 **bank_risk_score leakage** — a 0.62% leakage was identified in audit. The bank risk score computed on training data slightly influences test set performance because some banks appear in both partitions. Impact is minimal but would be eliminated in production by using only pre-cutoff data for bank risk computation.
 
-**Qwen hallucination** — the 1.5B parameter model occasionally generates plausible-sounding but incorrect reasoning. The post-processing validator catches the most common failure modes. A fine-tuned model on expert-reviewed golden cases would eliminate this in production.
+**GPT-4o-mini hallucination** — the model occasionally generates plausible-sounding but incorrect reasoning. The post-processing validator catches the most common failure modes. A fine-tuned model on expert-reviewed golden cases would eliminate this in production.
 
 **Monitoring persistence** — the SQLite monitoring database resets on HuggingFace Space restarts (free tier has no persistent storage). For persistent monitoring, write predictions to a HuggingFace Dataset repository or an external database.
 
@@ -642,16 +648,14 @@ Concept drift (launderers changing behaviour such that feature-fraud relationshi
 | Component | Version |
 |---|---|
 | Python | 3.12.2 |
-| PyTorch | 2.5.1 (CUDA 12.1) |
 | XGBoost | 3.2.0 |
 | LightGBM | 4.6.0 |
 | SHAP | 0.46.0 |
-| Transformers | 4.46.0 |
+| OpenAI SDK | 1.x |
 | PySpark | 4.1.1 |
 | FastAPI | 0.115.0 |
 | React | 18.x |
-| GPU | NVIDIA RTX 3050 Laptop (4.29 GB VRAM) |
-| CUDA | 12.1 |
+| Deployment | AWS EC2 (CPU), port 8503 |
 | Java | OpenJDK 17 (required for PySpark 4.x) |
 
 ---

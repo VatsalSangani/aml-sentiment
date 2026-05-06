@@ -1,7 +1,7 @@
 // ── API service — connects React to FastAPI backend ───────────
-const BASE_URL = "http://localhost:8000";
+const BASE_URL = "http://13.134.107.196:8503";
 
-// ── Analyze a transaction (live — calls Qwen) ─────────────────
+// ── Analyze a transaction (live — calls GPT-4o-mini) ──────────
 export async function analyzeTransaction(formData) {
   const res = await fetch(`${BASE_URL}/analyze`, {
     method : "POST",
@@ -44,16 +44,16 @@ export async function getHealth() {
   return res.json();
 }
 
-// ── Qwen status ────────────────────────────────────────────────
-export async function getQwenStatus() {
-  const res = await fetch(`${BASE_URL}/qwen/status`);
-  if (!res.ok) throw new Error("Failed to get Qwen status");
+// ── XAI service status ─────────────────────────────────────────
+export async function getXaiStatus() {
+  const res = await fetch(`${BASE_URL}/xai/status`);
+  if (!res.ok) throw new Error("Failed to get XAI status");
   return res.json();
 }
 
-// ── Unload Qwen (free VRAM) ────────────────────────────────────
-export async function unloadQwen() {
-  const res = await fetch(`${BASE_URL}/qwen/unload`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to unload Qwen");
+// ── Unload XAI service ─────────────────────────────────────────
+export async function unloadXai() {
+  const res = await fetch(`${BASE_URL}/xai/unload`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to unload XAI service");
   return res.json();
 }

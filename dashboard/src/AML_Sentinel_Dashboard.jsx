@@ -176,14 +176,15 @@ function MetricCard({ label, value, sub, color = COLORS.accent }) {
 }
 
 // ── Tab button ─────────────────────────────────────────────────
-function TabBtn({ active, onClick, children, color }) {
+function TabBtn({ active, onClick, children, color, disabled }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={disabled ? undefined : onClick} style={{
       background: active ? `${color}18` : "transparent",
       border: `1px solid ${active ? color : COLORS.border}`,
-      borderRadius: 8, color: active ? color : COLORS.textDim,
-      padding: "10px 22px", cursor: "pointer", fontSize: 14,
-      fontWeight: active ? 600 : 400, transition: "all 0.2s ease", fontFamily: FONT_SANS
+      borderRadius: 8, color: disabled ? COLORS.border : (active ? color : COLORS.textDim),
+      padding: "10px 22px", cursor: disabled ? "not-allowed" : "pointer", fontSize: 14,
+      fontWeight: active ? 600 : 400, transition: "all 0.2s ease", fontFamily: FONT_SANS,
+      opacity: disabled ? 0.4 : 1,
     }}>{children}</button>
   );
 }
@@ -544,7 +545,7 @@ function ReportViewer() {
           </div>
         </div>
         <div style={{ background: COLORS.bg, borderRadius: 10, padding: 22, border: `1px solid ${COLORS.border}` }}>
-          <div style={{ fontSize: 12, color: COLORS.accent, letterSpacing: "0.08em", marginBottom: 18, fontFamily: FONT_SANS, fontWeight: 700, textTransform: "uppercase" }}>◈ Qwen 2.5 1.5B — AI Explanation</div>
+          <div style={{ fontSize: 12, color: COLORS.accent, letterSpacing: "0.08em", marginBottom: 18, fontFamily: FONT_SANS, fontWeight: 700, textTransform: "uppercase" }}>◈ GPT-4o-mini — AI Explanation</div>
           <div style={{ lineHeight: 1.9 }}>{formatExplanation(selected.explanation)}</div>
         </div>
       </div>
@@ -950,7 +951,7 @@ export default function AMLDashboard() {
     { id: "analyzer",    label: "Transaction Analyzer", color: COLORS.accent },
     { id: "reports",     label: "XAI Report Viewer",    color: COLORS.safe   },
     { id: "performance", label: "Model Performance",    color: COLORS.warn   },
-    { id: "monitoring",  label: "Model Monitoring",     color: "#FF8C00"     },
+    { id: "monitoring",  label: "Model Monitoring",     color: "#FF8C00", disabled: true },
   ];
 
   return (
@@ -985,7 +986,7 @@ export default function AMLDashboard() {
             <div style={{ height: 32, width: 1, background: COLORS.border }} />
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 11, color: COLORS.textDim, fontFamily: FONT_SANS, textTransform: "uppercase", letterSpacing: "0.08em" }}>Model</div>
-              <div style={{ fontSize: 13, color: COLORS.text, fontFamily: FONT_MONO, fontWeight: 600 }}>XGB + LGB + QWEN 2.5</div>
+              <div style={{ fontSize: 13, color: COLORS.text, fontFamily: FONT_MONO, fontWeight: 600 }}>XGB + LGB + GPT-4o-mini</div>
             </div>
           </div>
         </div>
@@ -1013,18 +1014,18 @@ export default function AMLDashboard() {
       <div style={{ maxWidth: 1440, margin: "0 auto", padding: "32px 36px" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 32 }}>
           {tabs.map(t => (
-            <TabBtn key={t.id} active={tab === t.id} onClick={() => setTab(t.id)} color={t.color}>{t.label}</TabBtn>
+            <TabBtn key={t.id} active={tab === t.id} onClick={() => setTab(t.id)} color={t.color} disabled={t.disabled}>{t.label}</TabBtn>
           ))}
         </div>
         {tab === "analyzer"    && <TransactionAnalyzer />}
         {tab === "reports"     && <ReportViewer />}
         {tab === "performance" && <ModelPerformance />}
-        {tab === "monitoring"  && <ModelMonitoring />}
+        {/* monitoring tab disabled — ModelMonitoring requires backend routes not deployed */}
       </div>
       {/* Footer */}
       <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: "18px 36px", marginTop: 20 }}>
         <div style={{ maxWidth: 1440, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: FONT_SANS }}>AML Sentinel — XGBoost + LightGBM Ensemble + Qwen 2.5 1.5B XAI</span>
+          <span style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: FONT_SANS }}>AML Sentinel — XGBoost + LightGBM Ensemble + GPT-4o-mini XAI</span>
           <span style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: FONT_SANS }}>IBM AML Dataset · 31.9M Transactions · 18 Features</span>
         </div>
       </div>
