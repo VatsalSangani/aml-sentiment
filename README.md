@@ -243,6 +243,8 @@ npm start
 The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
 GPT-4o-mini generates plain-English explanations on-demand.
 
+![Demo UI using React](https://github.com/VatsalSangani/aml-sentiment/blob/main/AML%20Sentinel%20Screenshot.png)
+
 ---
 
 ## Technical Decisions — Q&A
