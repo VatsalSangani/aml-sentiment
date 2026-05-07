@@ -1,0 +1,28 @@
+name: Deploy AML Sentinel to EC2
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: 13.134.107.196
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/projects/aml-sentinel
+            git pull origin main
+            source ~/venv/bin/activate
+            pip install -r requirements.txt -q
+            cd dashboard && npm install --silent && npm run build
+            sudo cp -r build/* /var/www/aml-sentinel/
+            sudo systemctl restart aml-sentinel
+            echo "✅ AML Sentinel deployed successfully"
