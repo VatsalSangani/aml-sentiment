@@ -90,7 +90,7 @@ FastAPI Backend (0.0.0.0:8503)
         │  POST /xai/unload  — release XAI client
         │
         ▼
-React Dashboard (http://13.134.107.196:8503)
+React Dashboard (http://13.134.107.196:8080)
         Transaction Analyzer | XAI Report Viewer | Model Performance
         │
         ▼
@@ -184,7 +184,7 @@ Java 17 (for PySpark — data processing only)
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/aml-sentinel.git
+git clone https://github.com/VatsalSangani/aml-sentiment.git
 cd aml-sentinel
 
 # Create and activate virtual environment
@@ -661,5 +661,3 @@ Concept drift (launderers changing behaviour such that feature-fraud relationshi
 ---
 
 *Built by Vatsal — February 2026*
-# CI/CD enabled
-# CI/CD enabled
