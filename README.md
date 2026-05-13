@@ -236,9 +236,9 @@ npm start
 
 ## Live Demo
 
-[![Live Demo](https://img.shields.io/badge/AWS%20EC2-Live%20Demo-orange)](http://13.134.107.196:8090/aml)
+[![Live Demo](https://img.shields.io/badge/AWS%20EC2-Live%20Demo-orange)](https://46kclo66ry2ptmxgwckb6ben4a0mdfsq.lambda-url.eu-west-2.on.aws/?p=aml)
 
-> **Try it live** → [Click here](https://portfolio.vatsalsangani.in/aml)
+> **Try it live** → [Click here](https://46kclo66ry2ptmxgwckb6ben4a0mdfsq.lambda-url.eu-west-2.on.aws/?p=aml)
 
 The deployed version runs XGBoost + LightGBM inference on CPU (HuggingFace free tier).
 GPT-4o-mini generates plain-English explanations on-demand.
