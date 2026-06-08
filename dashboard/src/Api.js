@@ -1,5 +1,5 @@
 // ── API service — connects React to FastAPI backend ───────────
-const BASE_URL = "http://13.134.107.196:8503";
+const BASE_URL = "https://portfolio.vatsalsangani.in/aml-ui/api";
 
 // ── Analyze a transaction (live — calls GPT-4o-mini) ──────────
 export async function analyzeTransaction(formData) {
