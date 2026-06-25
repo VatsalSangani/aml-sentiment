@@ -20,7 +20,7 @@ from config import API_HOST, API_PORT
 from db import monitor
 from security import limiter
 from services.model_service import model_service
-from routes import analyze, health, reports, stats, xai
+from routes import analyze, health, monitoring, reports, stats, xai
 
 
 @asynccontextmanager
@@ -52,6 +52,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(analyze.router)
+app.include_router(monitoring.router)
 app.include_router(reports.router)
 app.include_router(stats.router)
 app.include_router(xai.router)

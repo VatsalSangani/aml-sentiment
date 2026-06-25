@@ -3,7 +3,7 @@ import re
 from threading import Lock
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, APIError, APITimeoutError
 from dotenv import load_dotenv
 
 # .env lives at project root (one level above backend/)
@@ -184,23 +184,37 @@ class XAIService:
             "INVESTIGATOR NOTE: [One to two sentences — specific actionable next steps for the investigator]"
         )
 
-        response = self.client.chat.completions.create(
-            model       = "gpt-4o-mini",
-            messages    = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            max_tokens  = 500,
-            temperature = 0.1,
-            top_p       = 0.85,
-        )
-        explanation = response.choices[0].message.content.strip()
+        try:
+            response = self.client.chat.completions.create(
+                model       = "gpt-4o-mini",
+                messages    = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                max_tokens  = 500,
+                temperature = 0.1,
+                top_p       = 0.85,
+                timeout     = 15,
+            )
+            explanation = response.choices[0].message.content.strip()
+        except (APITimeoutError, APIError):
+            return self._template_explanation(verdict, confidence, t)
 
         issues = self._validate(explanation, features)
         if issues:
             explanation += f"\n\nVALIDATION WARNING: {'; '.join(issues)}"
 
         return explanation
+
+    def _template_explanation(self, verdict: str, confidence: str, t: dict) -> str:
+        """Extractive fallback used when the OpenAI call times out or errors."""
+        return (
+            f"ALERT STATUS: {verdict} ({confidence} confidence).\n\n"
+            f"PRIMARY CONCERN: {t['driver_sentences'][0] if t['driver_sentences'] else 'No single dominant risk factor identified.'}\n\n"
+            f"SUPPORTING EVIDENCE: {' '.join(t['driver_sentences'][1:3]) if len(t['driver_sentences']) > 1 else 'No additional supporting factors identified.'}\n\n"
+            "INVESTIGATOR NOTE: Automated narrative generation was unavailable for this transaction; "
+            "review the listed factors directly and consult a senior analyst if further context is needed."
+        )
 
 
 xai_service = XAIService()

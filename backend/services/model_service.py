@@ -26,6 +26,9 @@ CURRENCY_RISK: dict[str, int] = {
     "Australian Dollar": 2, "Canadian Dollar": 2, "Bitcoin": 1,
 }
 
+PAYMENT_RISK_LOWER: dict[str, int]  = {k.lower(): v for k, v in PAYMENT_RISK.items()}
+CURRENCY_RISK_LOWER: dict[str, int] = {k.lower(): v for k, v in CURRENCY_RISK.items()}
+
 FEATURE_COLS: list[str] = [
     "payment_format_risk", "amount_log", "fan_out_degree",
     "tx_velocity", "amount_per_tx", "fan_in_degree",
@@ -64,10 +67,10 @@ class ModelService:
 
     def build_features(self, req: Any) -> dict[str, Any]:
         """Engineer 18 features from raw transaction input."""
-        pfr      = PAYMENT_RISK.get(req.payment_format, 1)
-        cr       = CURRENCY_RISK.get(req.currency, 2)
+        pfr      = PAYMENT_RISK_LOWER.get(req.payment_format.strip().lower(), 1)
+        cr       = CURRENCY_RISK_LOWER.get(req.currency.strip().lower(), 2)
         amt_log  = math.log1p(req.amount)
-        is_cross = 1 if req.from_bank != req.to_bank else 0
+        is_cross = 1 if req.from_bank.strip().lower() != req.to_bank.strip().lower() else 0
         is_near  = 1 if 8000 <= req.amount < 10000 else 0
         fan_out  = req.fan_out
         vel      = req.tx_velocity

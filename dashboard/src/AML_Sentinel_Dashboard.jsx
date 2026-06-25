@@ -304,6 +304,7 @@ function TransactionAnalyzer() {
   const [result,       setResult]       = useState(null);
   const [analyzing,    setAnalyzing]    = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isDemoMode,   setIsDemoMode]   = useState(false);
 
   const paymentRisk  = { "ACH": 3, "Bitcoin": 2, "Cash": 1, "Cheque": 1, "Credit Card": 1, "Wire": 0, "Reinvestment": 0 };
   const paymentRiskNote = {
@@ -395,9 +396,11 @@ function TransactionAnalyzer() {
         vel        : f.tx_velocity         ?? vel,
         amtNative, amtUSD: amt, fxRate, symbol
       });
+      setIsDemoMode(false);
       setAnalyzing(false);
     } catch (err) {
       console.warn("Backend unavailable, using mock:", err.message);
+      setIsDemoMode(true);
       analyzeMock(pfr, cr, isCross, amtNative, fxRate, amt, isNear, fanOut, vel, symbol);
     }
   };
@@ -510,6 +513,16 @@ function TransactionAnalyzer() {
           </div>
         ) : (
           <div>
+            {isDemoMode && (
+              <div style={{
+                marginBottom: 20, padding: "10px 14px", borderRadius: 8,
+                background: `${COLORS.danger}18`, border: `1px solid ${COLORS.danger}50`,
+                color: COLORS.danger, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+                fontFamily: FONT_SANS, textTransform: "uppercase"
+              }}>
+                ⚠️ Demo data — live backend unavailable (instance may be waking up)
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28 }}>
               <ScoreGauge score={result.score} size={115} />
               <div>

@@ -124,6 +124,27 @@ def get_recent_rows(days: int = 7) -> list:
         return []
 
 
+def get_recent_predictions(limit: int = 10, days: int = 1) -> list[dict]:
+    """Recent predictions with bank fields, for the dashboard's monitoring table."""
+    try:
+        conn = _connect()
+        rows = conn.execute("""
+            SELECT payment_format, currency, amount_usd, from_bank, to_bank,
+                   risk_score, verdict, timestamp
+            FROM predictions
+            WHERE timestamp >= datetime('now', ?)
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (f"-{days} days", limit)).fetchall()
+        conn.close()
+        keys = ["payment_format", "currency", "amount_usd", "from_bank", "to_bank",
+                 "risk_score", "verdict", "timestamp"]
+        return [dict(zip(keys, r)) for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to fetch recent predictions: {e}")
+        return []
+
+
 def export_to_json(days: int = 30) -> list:
     keys = [
         "risk_score", "verdict", "payment_format", "currency",
