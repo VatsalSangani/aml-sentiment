@@ -1,0 +1,56 @@
+# ── AML Sentinel — Requirements ────────────────────────────────
+# Python 3.12.2
+# CUDA 12.1 compatible
+
+# ── PyTorch (install separately with CUDA index) ───────────────
+# Run: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+
+# ── Big Data Engine ────────────────────────────────────────────
+pyspark
+
+# ── ML / Detection Stack ───────────────────────────────────────
+xgboost
+lightgbm
+scikit-learn
+imbalanced-learn
+
+# ── Data Science Utilities ─────────────────────────────────────
+pandas>=2.2.0
+numpy
+matplotlib
+seaborn
+pyarrow
+fastparquet
+tqdm
+
+# ── Jupyter ────────────────────────────────────────────────────
+jupyter
+notebook
+ipykernel
+
+# ── AI / LLM Stack ─────────────────────────────────────────────
+transformers
+datasets
+tokenizers
+sentencepiece
+peft
+trl
+accelerate
+bitsandbytes
+optimum
+einops
+
+# ── Unsloth (install with --no-deps to protect torch) ──────────
+# Run: pip install unsloth --no-deps
+
+# ────────── FastAPI and FrontEnd Connection ──────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+slowapi
+openai
+shap
+python-dotenv
