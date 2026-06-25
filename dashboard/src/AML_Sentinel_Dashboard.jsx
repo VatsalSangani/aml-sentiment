@@ -190,6 +190,15 @@ function TabBtn({ active, onClick, children, color, disabled }) {
 }
 
 // ── Explanation formatter ──────────────────────────────────────
+function extractVerdictBanner(text) {
+  const alertLine   = text.split('\n').find(l => l.startsWith("ALERT STATUS:"));
+  const concernLine = text.split('\n').find(l => l.startsWith("PRIMARY CONCERN:"));
+  return {
+    alert  : alertLine   ? alertLine.replace("ALERT STATUS:", "").trim()   : null,
+    concern: concernLine ? concernLine.replace("PRIMARY CONCERN:", "").trim() : null,
+  };
+}
+
 function formatExplanation(text) {
   return text.split('\n').map((line, i) => {
     if (["ALERT STATUS:", "PRIMARY CONCERN:", "SUPPORTING EVIDENCE:", "INVESTIGATOR NOTE:"].some(k => line.startsWith(k))) {
@@ -289,12 +298,26 @@ function buildExplanation({ score, flagged, pfr, cr, isCross, isNear, fanOut, ve
 function TransactionAnalyzer() {
   const [form, setForm] = useState({
     payment_format: "ACH", amount: "", from_bank: "", to_bank: "",
-    currency: "US Dollar", fan_out: "", tx_velocity: ""
+    currency: "US Dollar", fan_out: "", tx_velocity: "",
+    hour_of_day: "", is_in_cycle: false, fan_in: ""
   });
-  const [result,    setResult]    = useState(null);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [result,       setResult]       = useState(null);
+  const [analyzing,    setAnalyzing]    = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isDemoMode,   setIsDemoMode]   = useState(false);
 
   const paymentRisk  = { "ACH": 3, "Bitcoin": 2, "Cash": 1, "Cheque": 1, "Credit Card": 1, "Wire": 0, "Reinvestment": 0 };
+  const paymentRiskNote = {
+    "ACH":          "Higher risk — bulk/automated transfers are a common laundering vector.",
+    "Bitcoin":      "Elevated risk — pseudonymous and harder to trace across borders.",
+    "Cash":         "Lower model risk score, but cash-intensive activity warrants its own scrutiny.",
+    "Cheque":       "Lower model risk score — slower, more traceable settlement.",
+    "Credit Card":  "Lower model risk score — heavily monitored by issuers.",
+    "Wire":         "Lowest model risk score — but large wires still merit threshold checks.",
+    "Reinvestment": "Lowest model risk score — typically intra-institution fund movement.",
+  };
+
+  // ── Preset example transactions (Section 5.2) ─────────────────
   const currencyRisk = { "UK Pound": 5, "Ruble": 5, "Euro": 4, "Yen": 4, "US Dollar": 3, "Yuan": 3, "Rupee": 3, "Australian Dollar": 2, "Canadian Dollar": 2, "Bitcoin": 1 };
   const fxToUSD      = { "US Dollar": 1.00, "UK Pound": 1.27, "Euro": 1.08, "Yen": 0.0067, "Ruble": 0.011, "Yuan": 0.138, "Rupee": 0.012, "Australian Dollar": 0.63, "Canadian Dollar": 0.74, "Bitcoin": 96000 };
   const currencySymbol = { "US Dollar": "$", "UK Pound": "£", "Euro": "€", "Yen": "¥", "Ruble": "₽", "Yuan": "¥", "Rupee": "₹", "Australian Dollar": "A$", "Canadian Dollar": "C$", "Bitcoin": "₿" };
@@ -349,7 +372,12 @@ function TransactionAnalyzer() {
           to_bank        : form.to_bank   || "UNKNOWN",
           currency       : form.currency,
           fan_out        : fanOut,
-          tx_velocity    : vel
+          tx_velocity    : vel,
+          ...(showAdvanced ? {
+            hour_of_day: form.hour_of_day === "" ? null : parseInt(form.hour_of_day),
+            is_in_cycle: form.is_in_cycle,
+            fan_in     : form.fan_in === "" ? null : parseInt(form.fan_in),
+          } : {})
         })
       });
       if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -368,9 +396,11 @@ function TransactionAnalyzer() {
         vel        : f.tx_velocity         ?? vel,
         amtNative, amtUSD: amt, fxRate, symbol
       });
+      setIsDemoMode(false);
       setAnalyzing(false);
     } catch (err) {
       console.warn("Backend unavailable, using mock:", err.message);
+      setIsDemoMode(true);
       analyzeMock(pfr, cr, isCross, amtNative, fxRate, amt, isNear, fanOut, vel, symbol);
     }
   };
@@ -381,7 +411,7 @@ function TransactionAnalyzer() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
       <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 32 }}>
-        <div style={{ fontSize: 16, color: COLORS.accent, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 28, fontWeight: 700, fontFamily: FONT_SANS }}>◈ Transaction Input</div>
+        <div style={{ fontSize: 16, color: COLORS.accent, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16, fontWeight: 700, fontFamily: FONT_SANS }}>◈ Transaction Input</div>
         {(() => {
           const isCrypto        = form.payment_format === "Bitcoin";
           const fromPlaceholder = isCrypto ? "e.g. Binance, Kraken, Coinbase" : "e.g. HSBC, JPMorgan";
@@ -392,38 +422,77 @@ function TransactionAnalyzer() {
           const usdAmt          = nativeAmt * rate;
           const showFX          = form.currency !== "US Dollar" && nativeAmt > 0;
           const fields = [
-            { key: "payment_format", label: "Payment Format", type: "select", options: ["ACH","Bitcoin","Cash","Cheque","Credit Card","Wire","Reinvestment"] },
+            { key: "payment_format", label: "Payment Format", type: "select", options: ["ACH","Bitcoin","Cash","Cheque","Credit Card","Wire","Reinvestment"], help: paymentRiskNote[form.payment_format] },
             { key: "currency",       label: "Currency",       type: "select", options: ["US Dollar","UK Pound","Euro","Yen","Ruble","Yuan","Rupee","Bitcoin","Australian Dollar","Canadian Dollar"] },
             { key: "amount",         label: `Amount in ${form.currency} — will be converted to USD`, type: "number", placeholder: isCrypto ? "e.g. 0.5 BTC" : `e.g. ${sym}9,500` },
-            { key: "from_bank",      label: isCrypto ? "From Exchange / Wallet" : "From Bank", type: "text", placeholder: fromPlaceholder },
-            { key: "to_bank",        label: isCrypto ? "To Exchange / Wallet"   : "To Bank",   type: "text", placeholder: toPlaceholder },
-            { key: "fan_out",        label: isCrypto ? "Addresses Sent To (lifetime)" : "Accounts Sent To (lifetime)", type: "number", placeholder: isCrypto ? "e.g. 340" : "e.g. 12" },
-            { key: "tx_velocity",    label: "Lifetime Transaction Count",       type: "number", placeholder: "e.g. 250" },
+            { key: "from_bank",      label: isCrypto ? "From Exchange / Wallet" : "From Bank", type: "text", placeholder: fromPlaceholder, help: "Use the same value for From and To to model an internal transfer." },
+            { key: "to_bank",        label: isCrypto ? "To Exchange / Wallet"   : "To Bank",   type: "text", placeholder: toPlaceholder,   help: "Use the same value for From and To to model an internal transfer." },
+            { key: "fan_out",        label: isCrypto ? "Addresses Sent To (lifetime)" : "Accounts Sent To (lifetime)", type: "number", placeholder: isCrypto ? "e.g. 340" : "e.g. 12", help: "How many different accounts this sender has paid." },
+            { key: "tx_velocity",    label: "Lifetime Transaction Count",       type: "number", placeholder: "e.g. 250", help: "Total number of transactions this account has made." },
+          ];
+          const advancedFields = [
+            { key: "hour_of_day", label: "Hour of Day (0–23)", type: "number", placeholder: "e.g. 14", help: "When the transaction occurred. Late-night activity is often higher risk." },
+            { key: "fan_in",      label: "Accounts Received From (lifetime)", type: "number", placeholder: "e.g. 3", help: "How many different accounts have sent money to this account." },
           ];
           return (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              {fields.map(field => (
-                <div key={field.key} style={{ gridColumn: field.key === "amount" ? "span 2" : "span 1" }}>
-                  <label style={labelStyle}>{field.label}</label>
-                  {field.type === "select" ? (
-                    <select value={form[field.key]} onChange={e => setForm({ ...form, [field.key]: e.target.value })} style={inputStyle}>
-                      {field.options.map(o => <option key={o}>{o}</option>)}
-                    </select>
-                  ) : (
-                    <input type={field.type} placeholder={field.placeholder} value={form[field.key]}
-                      onChange={e => setForm({ ...form, [field.key]: e.target.value })} style={inputStyle} />
-                  )}
-                  {field.key === "amount" && showFX && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: COLORS.accent, fontFamily: FONT_MONO }}>
-                      ≈ ${usdAmt.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD
-                      <span style={{ color: COLORS.textDim, fontFamily: FONT_SANS, marginLeft: 8 }}>
-                        (1 {form.currency} = ${rate} USD · approximate)
-                      </span>
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                {fields.map(field => (
+                  <div key={field.key} style={{ gridColumn: field.key === "amount" ? "span 2" : "span 1" }}>
+                    <label style={labelStyle}>{field.label}</label>
+                    {field.type === "select" ? (
+                      <select value={form[field.key]} onChange={e => setForm({ ...form, [field.key]: e.target.value })} style={inputStyle}>
+                        {field.options.map(o => <option key={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input type={field.type} placeholder={field.placeholder} value={form[field.key]}
+                        onChange={e => setForm({ ...form, [field.key]: e.target.value })} style={inputStyle} />
+                    )}
+                    {field.key === "amount" && showFX && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: COLORS.accent, fontFamily: FONT_MONO }}>
+                        ≈ ${usdAmt.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD
+                        <span style={{ color: COLORS.textDim, fontFamily: FONT_SANS, marginLeft: 8 }}>
+                          (1 {form.currency} = ${rate} USD · approximate)
+                        </span>
+                      </div>
+                    )}
+                    {field.help && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: COLORS.textDim, fontFamily: FONT_SANS }}>{field.help}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={() => setShowAdvanced(!showAdvanced)} style={{
+                marginTop: 20, background: "none", border: "none", color: COLORS.accent,
+                fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: FONT_SANS,
+                fontWeight: 600, cursor: "pointer", padding: 0
+              }}>
+                {showAdvanced ? "▾ Hide advanced fields" : "▸ Show advanced fields"}
+              </button>
+
+              {showAdvanced && (
+                <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  {advancedFields.map(field => (
+                    <div key={field.key}>
+                      <label style={labelStyle}>{field.label}</label>
+                      <input type={field.type} placeholder={field.placeholder} value={form[field.key]}
+                        onChange={e => setForm({ ...form, [field.key]: e.target.value })} style={inputStyle} />
+                      <div style={{ marginTop: 6, fontSize: 12, color: COLORS.textDim, fontFamily: FONT_SANS }}>{field.help}</div>
                     </div>
-                  )}
+                  ))}
+                  <div>
+                    <label style={labelStyle}>Part of a Circular Payment Chain?</label>
+                    <select value={form.is_in_cycle ? "yes" : "no"}
+                      onChange={e => setForm({ ...form, is_in_cycle: e.target.value === "yes" })} style={inputStyle}>
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                    <div style={{ marginTop: 6, fontSize: 12, color: COLORS.textDim, fontFamily: FONT_SANS }}>Whether funds eventually loop back to the sender through a chain of accounts — a classic laundering pattern.</div>
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           );
         })()}
         <button onClick={analyze} disabled={analyzing} style={{
@@ -444,6 +513,16 @@ function TransactionAnalyzer() {
           </div>
         ) : (
           <div>
+            {isDemoMode && (
+              <div style={{
+                marginBottom: 20, padding: "10px 14px", borderRadius: 8,
+                background: `${COLORS.danger}18`, border: `1px solid ${COLORS.danger}50`,
+                color: COLORS.danger, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+                fontFamily: FONT_SANS, textTransform: "uppercase"
+              }}>
+                ⚠️ Demo data — live backend unavailable (instance may be waking up)
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 28 }}>
               <ScoreGauge score={result.score} size={115} />
               <div>
@@ -454,6 +533,27 @@ function TransactionAnalyzer() {
                 <div style={{ fontSize: 13, color: COLORS.textDim, marginTop: 8, fontFamily: FONT_SANS }}>Threshold: 0.65</div>
               </div>
             </div>
+            {(() => {
+              const { alert, concern } = extractVerdictBanner(result.explanation);
+              if (!alert && !concern) return null;
+              const bannerColor = result.flagged ? COLORS.danger : COLORS.safe;
+              return (
+                <div style={{
+                  marginBottom: 24, padding: "18px 22px", borderRadius: 10,
+                  background: `${bannerColor}15`, border: `1px solid ${bannerColor}50`,
+                  borderLeft: `4px solid ${bannerColor}`
+                }}>
+                  {alert && (
+                    <div style={{ fontSize: 16, fontWeight: 700, color: bannerColor, fontFamily: FONT_SANS, marginBottom: concern ? 8 : 0 }}>
+                      {result.flagged ? "⚠ " : "✓ "}{alert}
+                    </div>
+                  )}
+                  {concern && (
+                    <div style={{ fontSize: 14, color: COLORS.text, fontFamily: FONT_SANS, lineHeight: 1.6 }}>{concern}</div>
+                  )}
+                </div>
+              );
+            })()}
             <div style={{ fontSize: 13, color: COLORS.accent, letterSpacing: "0.08em", marginBottom: 14, textTransform: "uppercase", fontFamily: FONT_SANS, fontWeight: 600 }}>SHAP Impact Analysis</div>
             {result.shap.map(d => <ShapBar key={d.feature} feature={d.feature} value={d.shap_val} maxAbs={4} />)}
             <div style={{ marginTop: 20, padding: 20, background: COLORS.bg, borderRadius: 10, border: `1px solid ${result.flagged ? COLORS.danger : COLORS.safe}40` }}>

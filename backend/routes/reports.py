@@ -21,7 +21,10 @@ async def get_reports():
             detail="No XAI reports found. Run AML_XAI.ipynb first.",
         )
 
-    with open(json_files[0], "r", encoding="utf-8") as f:
-        reports = json.load(f)
+    try:
+        with open(json_files[0], "r", encoding="utf-8") as f:
+            reports = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(status_code=500, detail="Could not load reports.")
 
     return {"reports": reports, "count": len(reports)}

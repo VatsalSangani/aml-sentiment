@@ -7,13 +7,13 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_base = Path(os.environ.get("MONITOR_DB_DIR", "/tmp/aml_monitoring"))
+_base = Path(os.environ.get("MONITOR_DB_DIR", os.path.expanduser("~/aml_monitoring")))
 _base.mkdir(parents=True, exist_ok=True)
 DB_PATH = _base / "predictions.db"
 
@@ -46,9 +46,15 @@ CREATE INDEX IF NOT EXISTS idx_verdict   ON predictions(verdict);
 """
 
 
+def _connect():
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    return conn
+
+
 def init_db() -> None:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect()
         conn.executescript(_CREATE_SQL)
         conn.commit()
         conn.close()
@@ -60,7 +66,7 @@ def init_db() -> None:
 def log_prediction(request: Any, result: dict, processing_ms: int = 0) -> None:
     try:
         f = result.get("features", {})
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect()
         conn.execute("""
             INSERT INTO predictions (
                 timestamp, payment_format, currency, amount_usd,
@@ -71,7 +77,7 @@ def log_prediction(request: Any, result: dict, processing_ms: int = 0) -> None:
                 tx_velocity_feat, risk_score, verdict, processing_ms
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             request.payment_format, request.currency, request.amount,
             request.from_bank, request.to_bank, request.fan_out, request.tx_velocity,
             f.get("payment_format_risk",  0), f.get("currency_risk_score",  0),
@@ -89,7 +95,7 @@ def log_prediction(request: Any, result: dict, processing_ms: int = 0) -> None:
 
 def get_total_logged() -> int:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect()
         n = conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0]
         conn.close()
         return n
@@ -99,7 +105,7 @@ def get_total_logged() -> int:
 
 def get_recent_rows(days: int = 7) -> list:
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = _connect()
         rows = conn.execute("""
             SELECT
                 risk_score, verdict, payment_format, currency,
@@ -115,6 +121,27 @@ def get_recent_rows(days: int = 7) -> list:
         return rows
     except Exception as e:
         logger.error(f"Failed to fetch rows: {e}")
+        return []
+
+
+def get_recent_predictions(limit: int = 10, days: int = 1) -> list[dict]:
+    """Recent predictions with bank fields, for the dashboard's monitoring table."""
+    try:
+        conn = _connect()
+        rows = conn.execute("""
+            SELECT payment_format, currency, amount_usd, from_bank, to_bank,
+                   risk_score, verdict, timestamp
+            FROM predictions
+            WHERE timestamp >= datetime('now', ?)
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (f"-{days} days", limit)).fetchall()
+        conn.close()
+        keys = ["payment_format", "currency", "amount_usd", "from_bank", "to_bank",
+                 "risk_score", "verdict", "timestamp"]
+        return [dict(zip(keys, r)) for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to fetch recent predictions: {e}")
         return []
 
 

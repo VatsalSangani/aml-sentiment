@@ -26,6 +26,9 @@ CURRENCY_RISK: dict[str, int] = {
     "Australian Dollar": 2, "Canadian Dollar": 2, "Bitcoin": 1,
 }
 
+PAYMENT_RISK_LOWER: dict[str, int]  = {k.lower(): v for k, v in PAYMENT_RISK.items()}
+CURRENCY_RISK_LOWER: dict[str, int] = {k.lower(): v for k, v in CURRENCY_RISK.items()}
+
 FEATURE_COLS: list[str] = [
     "payment_format_risk", "amount_log", "fan_out_degree",
     "tx_velocity", "amount_per_tx", "fan_in_degree",
@@ -64,15 +67,17 @@ class ModelService:
 
     def build_features(self, req: Any) -> dict[str, Any]:
         """Engineer 18 features from raw transaction input."""
-        pfr      = PAYMENT_RISK.get(req.payment_format, 1)
-        cr       = CURRENCY_RISK.get(req.currency, 2)
+        pfr      = PAYMENT_RISK_LOWER.get(req.payment_format.strip().lower(), 1)
+        cr       = CURRENCY_RISK_LOWER.get(req.currency.strip().lower(), 2)
         amt_log  = math.log1p(req.amount)
-        is_cross = 1 if req.from_bank != req.to_bank else 0
+        is_cross = 1 if req.from_bank.strip().lower() != req.to_bank.strip().lower() else 0
         is_near  = 1 if 8000 <= req.amount < 10000 else 0
         fan_out  = req.fan_out
         vel      = req.tx_velocity
         amt_per_tx    = req.amount / max(vel, 1)
-        hour_of_day   = 12
+        hour_of_day   = req.hour_of_day if getattr(req, "hour_of_day", None) is not None else 12
+        is_in_cycle   = int(req.is_in_cycle) if getattr(req, "is_in_cycle", None) is not None else 0
+        fan_in_degree = req.fan_in if getattr(req, "fan_in", None) is not None else 1
         is_peak_hour  = 1 if 9 <= hour_of_day <= 17 else 0
         is_high_fan   = 1 if fan_out > 50 else 0
 
@@ -82,14 +87,14 @@ class ModelService:
             "fan_out_degree"        : fan_out,
             "tx_velocity"           : vel,
             "amount_per_tx"         : round(amt_per_tx, 2),
-            "fan_in_degree"         : 1,
+            "fan_in_degree"         : fan_in_degree,
             "bank_risk_score"       : 0.15,
             "amount_zscore_per_bank": 0.0,
             "hour_of_day"           : hour_of_day,
             "day_of_week"           : 2,
             "is_cross_border"       : is_cross,
             "currency_risk_score"   : cr,
-            "is_in_cycle"           : 0,
+            "is_in_cycle"           : is_in_cycle,
             "is_weekend"            : 0,
             "is_peak_hour"          : is_peak_hour,
             "is_hub_bank"           : 0,
@@ -108,6 +113,9 @@ class ModelService:
 
         xgb_w  = self.weights_meta["xgb_weight"]
         lgb_w  = self.weights_meta["lgb_weight"]
+        # Decision threshold (0.8514) tuned on the validation-set precision-recall
+        # curve to maximise F1. See docs/THRESHOLD_DERIVATION.md for full rationale,
+        # validation-vs-test behaviour, and how to re-derive for other objectives.
         thresh = self.weights_meta["threshold"]
 
         xgb_p  = float(self.xgb_model.predict_proba(X)[0, 1])
