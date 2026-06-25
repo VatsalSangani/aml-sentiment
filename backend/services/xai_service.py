@@ -4,7 +4,15 @@ from threading import Lock
 from typing import Any
 
 from openai import OpenAI
+from dotenv import load_dotenv
 
+# .env lives at project root (one level above backend/)
+_ENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(_ENV_PATH)
+
+# Decision threshold for FLAGGED vs CLEARED. Must match the "threshold" value in
+# models/ensemble_weights.json (model_service uses that copy). Derivation and the
+# reason for this specific value: see docs/THRESHOLD_DERIVATION.md
 XAI_THRESHOLD: float = 0.8514
 
 

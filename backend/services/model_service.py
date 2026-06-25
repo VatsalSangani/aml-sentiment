@@ -72,7 +72,9 @@ class ModelService:
         fan_out  = req.fan_out
         vel      = req.tx_velocity
         amt_per_tx    = req.amount / max(vel, 1)
-        hour_of_day   = 12
+        hour_of_day   = req.hour_of_day if getattr(req, "hour_of_day", None) is not None else 12
+        is_in_cycle   = int(req.is_in_cycle) if getattr(req, "is_in_cycle", None) is not None else 0
+        fan_in_degree = req.fan_in if getattr(req, "fan_in", None) is not None else 1
         is_peak_hour  = 1 if 9 <= hour_of_day <= 17 else 0
         is_high_fan   = 1 if fan_out > 50 else 0
 
@@ -82,14 +84,14 @@ class ModelService:
             "fan_out_degree"        : fan_out,
             "tx_velocity"           : vel,
             "amount_per_tx"         : round(amt_per_tx, 2),
-            "fan_in_degree"         : 1,
+            "fan_in_degree"         : fan_in_degree,
             "bank_risk_score"       : 0.15,
             "amount_zscore_per_bank": 0.0,
             "hour_of_day"           : hour_of_day,
             "day_of_week"           : 2,
             "is_cross_border"       : is_cross,
             "currency_risk_score"   : cr,
-            "is_in_cycle"           : 0,
+            "is_in_cycle"           : is_in_cycle,
             "is_weekend"            : 0,
             "is_peak_hour"          : is_peak_hour,
             "is_hub_bank"           : 0,
@@ -108,6 +110,9 @@ class ModelService:
 
         xgb_w  = self.weights_meta["xgb_weight"]
         lgb_w  = self.weights_meta["lgb_weight"]
+        # Decision threshold (0.8514) tuned on the validation-set precision-recall
+        # curve to maximise F1. See docs/THRESHOLD_DERIVATION.md for full rationale,
+        # validation-vs-test behaviour, and how to re-derive for other objectives.
         thresh = self.weights_meta["threshold"]
 
         xgb_p  = float(self.xgb_model.predict_proba(X)[0, 1])

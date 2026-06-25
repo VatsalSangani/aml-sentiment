@@ -498,13 +498,17 @@ Our monitoring system detects data drift and prediction drift. Concept drift det
 
 ## Model Performance
 
+**Design choice:** the model is optimised for recall (81.23%) over precision, reflecting the AML reality that a missed suspicious transaction (false negative) carries far higher regulatory and financial cost than an analyst reviewing a false positive.
+
+**Headline metric — AUC-PR (0.3857):** under extreme class imbalance (~0.1% positive rate), AUC-PR is the appropriate measure of model quality — it focuses entirely on the minority (fraud) class. AUC-ROC (0.9857), while reported below for completeness, is known to be optimistic on imbalanced datasets, since the overwhelming majority-class volume inflates the score.
+
 | Metric | Value |
 |---|---|
-| AUC-ROC | 0.9857 |
 | AUC-PR | 0.3857 |
 | Recall | 81.23% |
 | Precision | 6.00% |
 | F1 Score | 0.1117 |
+| AUC-ROC | 0.9857 |
 | Threshold | 0.8514 |
 | Total test transactions | 6,380,255 |
 | Alerts generated | 93,325 (1.46%) |
@@ -512,6 +516,8 @@ Our monitoring system detects data drift and prediction drift. Concept drift det
 | False positives | 87,726 |
 | False negatives | 1,294 |
 | True negatives | 6,285,636 |
+
+**Confusion matrix (above):** shown in full because it makes the recall/precision tradeoff explicit rather than hiding it — 5,599 true positives caught vs. 1,294 missed, at the cost of 87,726 false-positive alerts for analysts to review.
 
 **On precision:** 6% precision means 1 in 17 alerts is real fraud. This sounds low but is within the normal range for AML systems in practice — financial crime compliance teams typically see 2–5% precision (95%+ false positive rates) in deployed production systems. Our 6% is above industry average.
 
